@@ -1,24 +1,43 @@
 import mongoose from 'mongoose';
+
 const DB_URI = process.env.DB_URI;
 
-export async function connectDB() {
-  let retry = 0;
-  while (retry < 3) {
+if (!DB_URI) {
+  throw new Error('Missing DB_URI environment variable');
+}
+
+async function connectWithRetry() {
+  let attempt = 0;
+  const maxRetries = 5; // Max retry attempts
+  const retryDelay = 5000; // Retry delay in (5 seconds)
+
+  while (attempt < maxRetries) {
     try {
       const conn = await mongoose.connect(DB_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
+        maxPoolSize: 50,
+        minPoolSize: 5,
+        maxIdleTimeMS: 60000, // 1 min max idle before mongodb clears unused connection
+        waitQueueTimeoutMS: 5000, // Don't let clients wait forever
+        socketTimeoutMS: 30000,
+        serverSelectionTimeoutMS: 30000, // 30s timeout to connect mongodb
       });
       console.log(`MongoDB connected: ${conn.connection.host}`);
-      return;
+      break;
     } catch (error) {
-      console.error('MongoDB connection error:', error.message);
-      retry++;
-      if (retry >= 3) {
-        console.error('MongoDB connection failed after 3 retries');
-        process.exit(1);
+      attempt++;
+      console.error(`Attempt ${attempt}: MongoDB connection error:`, error.message);
+
+      if (attempt === maxRetries) {
+        console.error('Max retries reached. Exiting...');
+        process.exit(1); // Exit if max retries are reached
       }
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      console.log(`Retrying in ${retryDelay / 1000} seconds...`);
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
     }
   }
+}
+
+export async function connectDB() {
+  await connectWithRetry();
 }

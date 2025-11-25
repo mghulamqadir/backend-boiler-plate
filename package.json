@@ -1,12 +1,10 @@
 {
-  "name": "pay-tax-backend",
+  "name": "backend-boiler-plate",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
-  "description": "Backend Boiler Plate",
   "main": "index.js",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "start": "node --env-file=.env index.js",
@@ -20,34 +18,36 @@
   "dependencies": {
     "@adminjs/express": "^6.1.1",
     "@adminjs/mongoose": "^4.1.0",
-    "@getbrevo/brevo": "^1.0.0",
-    "@sendgrid/mail": "^8.1.4",
-    "adminjs": "^7.8.16",
+    "@getbrevo/brevo": "^3.0.1",
+    "@sendgrid/mail": "^8.1.6",
+    "adminjs": "^7.8.17",
     "aws-sdk": "^2.1692.0",
-    "axios": "^1.9.0",
-    "bcryptjs": "^2.4.3",
-    "body-parser": "^1.20.3",
+    "bcryptjs": "^3.0.3",
+    "body-parser": "^2.2.1",
     "cors": "^2.8.5",
-    "cron": "^4.3.1",
-    "express": "^4.21.2",
-    "joi": "^17.13.3",
+    "cron": "^4.3.4",
+    "express": "^5.1.0",
+    "joi": "^18.0.2",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.10.0",
-    "morgan": "^1.10.0",
-    "multer": "^2.0.0",
-    "sharp": "^0.33.5",
+    "mongoose": "^9.0.0",
+    "morgan": "^1.10.1",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.5",
     "sib-api-v3-sdk": "^8.5.0",
     "streamifier": "^0.1.1",
-    "stripe": "^18.1.0",
-    "uuid": "^11.0.5"
+    "stripe": "^20.0.0",
+    "uuid": "^13.0.0"
+  },
+  "overrides": {
+    "tinymce": "7.2.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.20.0",
-    "eslint": "^9.20.0",
-    "globals": "^15.14.0",
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
     "husky": "^9.1.7",
-    "lint-staged": "^15.4.3",
-    "prettier": "^3.5.0"
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.6.2"
   },
   "lint-staged": {
     "*.{js,ts}": [
@@ -55,8 +55,8 @@
       "prettier --write"
     ]
   },
-  "homepage": "https://github.com/mghulamqadir/boiler-plate-backend#readme",
+  "homepage": "https://github.com/mghulamqadir/backend-boiler-plate#readme",
   "bugs": {
-    "url": "https://github.com/mghulamqadir/boiler-plate-backend/issues"
+    "url": "https://github.com/mghulamqadir/backend-boiler-plate/issues"
   }
 }

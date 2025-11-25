@@ -45,13 +45,6 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-userSchema.virtual('reviews', {
-  ref: 'Review',
-  localField: '_id',
-  foreignField: 'vendorId',
-  justOne: false,
-});
-
 userSchema.set('toJSON', { virtuals: true });
 userSchema.set('toObject', { virtuals: true });
 

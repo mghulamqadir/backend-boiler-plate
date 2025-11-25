@@ -1,4 +1,3 @@
-import axios from 'axios';
 import * as userService from '../services/user.services.js';
 import { successResponse, errorResponse } from '../utils/response.handler.js';
 
