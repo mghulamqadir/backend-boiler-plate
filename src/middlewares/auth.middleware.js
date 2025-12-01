@@ -13,6 +13,8 @@ const validateRequest = (schema) => (req, res, next) => {
   next();
 };
 
+const passwordRegex = /^(?!^\s)(?!\s$)(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[ !@#$%^&*(),.?":{}|<>_\-])[A-Za-z\d !@#$%^&*(),.?":{}|<>_\-]{8,}$/;
+const emailRegex = /^(?!\s)([+\w-]+(?:\.[+\w-]+)*)@((?:[\w-]+\.)*\w[\w-]{0,66})\.([a-zA-Z]{2,6}(?:\.[a-zA-Z]{2})?)$/;
 const signupSchema = Joi.object({
   name: Joi.string().min(3).required().messages({
     'string.min':
@@ -23,9 +25,7 @@ const signupSchema = Joi.object({
   }),
   email: Joi.string()
     .email({ tlds: { allow: ['com', 'net'] } })
-    .regex(
-      /^(?!\s)([+\w-]+(?:\.[+\w-]+)*)@((?:[\w-]+\.)*\w[\w-]{0,66})\.([a-zA-Z]{2,6}(?:\.[a-zA-Z]{2})?)$/,
-    )
+    .regex(emailRegex)
     .required()
     .custom((value) => value.toLowerCase())
     .messages({
@@ -34,12 +34,12 @@ const signupSchema = Joi.object({
     }),
   password: Joi.string()
     .min(8)
-    .regex(/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[\W_])(?!.*\s)/)
+    .regex(passwordRegex)
     .required()
     .messages({
       'string.min': 'Password must be at least 8 characters.',
       'string.pattern.base':
-        'Password must contain 1 number, 1 lowercase letter, 1 uppercase letter, 1 special character, and no spaces.',
+        'Password must contain 1 number, 1 lowercase letter, 1 uppercase letter, 1 special character, and no spaces are allwoed at the start or end.',
       'any.required': 'Password is required.',
     }),
   confirmPassword: Joi.string().required().valid(Joi.ref('password')).messages({
@@ -60,17 +60,18 @@ const loginSchema = Joi.object({
 });
 
 const resetPasswordSchema = Joi.object({
-  code: Joi.string().required().messages({
-    'any.required': 'Reset code is required.',
+  code: Joi.string().min(3).required().messages({
+    'string.min': 'Invalid code.',
+    'any.required': 'Code is required.',
   }),
   newPassword: Joi.string()
     .min(8)
-    .regex(/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[\W_])(?!.*\s)/)
+    .regex(passwordRegex)
     .required()
     .messages({
       'string.min': 'Password must be at least 8 characters.',
       'string.pattern.base':
-        'Password must contain 1 number, 1 lowercase letter, and 1 uppercase letter and 1 special character and no spaces',
+        'Password must contain 1 number, 1 lowercase letter, and 1 uppercase letter and 1 special character and no spaces at the start or end.',
       'any.required': 'newPassword is required.',
     }),
 });
