@@ -12,7 +12,7 @@ const otpSchema = new mongoose.Schema(
             required: true,
         },
         newCode: {
-            type: Number,
+            type: String,
             required: true,
         },
         purpose: {

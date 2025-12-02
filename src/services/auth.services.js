@@ -9,6 +9,7 @@ import {
 } from '../utils/brevo.utils.js';
 import { stripeCreateCustomer } from '../utils/stripe.utils.js';
 import { generateSixDigitCode } from '../utils/constant.utils.js';
+import crypto from 'crypto';
 
 export async function onModuleInit() {
   try {
@@ -78,7 +79,6 @@ export async function signup({ name, email, password, confirmPassword }, file) {
   });
 
   const profilePictureUrl = file?.location || null;
-  console.log('Profile Picture URL:', profilePictureUrl);
 
   const newUser = new User({
     name,
@@ -100,7 +100,6 @@ export async function signup({ name, email, password, confirmPassword }, file) {
   });
   await sendVerificationEmail(savedUser, code);
 
-  // Omit password before returning
   const userData = savedUser.toObject();
   delete userData.password;
 
@@ -169,7 +168,7 @@ export async function login({ email, password }) {
 }
 
 export async function forgotPassword(email, redirectUrl) {
-  // 1. Find user by email
+
   const user = await User.findOne({ email });
   if (!user) {
     throw ApiError(
@@ -184,36 +183,55 @@ export async function forgotPassword(email, redirectUrl) {
   if (existingOtp) {
     await Otp.deleteOne({ userId: user._id, purpose: 'forgotPassword' });
   }
-  const resetCode = generateSixDigitCode();
+
+  const resetToken = crypto.randomBytes(32).toString('hex');
+
+  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
   await Otp.create({
     userId: user._id,
     email: user.email,
-    newCode: resetCode,
+    newCode: hashedToken,
     purpose: 'forgotPassword',
   });
-  // 4. Send code to user's email
-  await sendPasswordResetEmail(user, resetCode, redirectUrl);
-  return { message: 'Password reset email sent successfully.' };
+
+  await sendPasswordResetEmail(user, resetToken, redirectUrl);
+
+  return { message: 'Password reset Link sent successfully.' };
 }
 
-export async function resetPassword(code, newPassword) {
-  // 1. Look up user by reset code
-  const otp = await Otp.findOne({ newCode: code, purpose: 'forgotPassword' });
+export async function resetPassword(token, newPassword) {
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const otp = await Otp.findOne({
+    newCode: hashedToken,
+    purpose: 'forgotPassword'
+  });
+
   if (!otp) {
-    throw ApiError(400, 'Invalid or expired reset code', [
-      'Please request a new reset code.',
+    throw ApiError(400, 'Invalid or expired reset token', [
+      'Please request a new password reset link.',
     ]);
   }
 
-  // 2. Hash and update new password
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  const user = await User.findById(otp.userId);
+  if (!user) {
+    throw ApiError(404, 'User not found');
+  }
 
-  await User.findOneAndUpdate(
-    { _id: otp.userId },
-    { password: hashedPassword },
-    { new: true },
-  );
+  const isSamePassword = bcrypt.compare(newPassword, user.password);
+  if (isSamePassword) {
+    throw ApiError(400, 'New password cannot be the same as the old password', [
+      'Please choose a different password.',
+    ]);
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await User.findByIdAndUpdate(user._id, { password: hashedPassword }, { new: true });
+
   await otp.deleteOne();
+
+  return { message: 'Password reset successfully.' };
 }
 
 export async function verifyEmail(code) {
