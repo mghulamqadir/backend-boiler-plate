@@ -28,7 +28,6 @@ const sendPasswordResetEmail = async (user, resetCode, redirectUrl) => {
       htmlContent: `
         <h3>Hello ${user.name},</h3>
         <p>We received a request to reset your password.</p>
-        <p>Your password reset code is: <strong>${resetCode}</strong></p>
         <p>Click the link below to reset your password:</p>
         <p><a href="${redirectUrl}/reset-password?code=${resetCode}">Reset Password</a></p>
         <p>If you did not request this, please ignore this email.</p>
