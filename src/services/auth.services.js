@@ -219,7 +219,7 @@ export async function resetPassword(token, newPassword) {
     throw ApiError(404, 'User not found');
   }
 
-  const isSamePassword = bcrypt.compare(newPassword, user.password);
+  const isSamePassword = await bcrypt.compare(newPassword, user.password);
   if (isSamePassword) {
     throw ApiError(400, 'New password cannot be the same as the old password', [
       'Please choose a different password.',
