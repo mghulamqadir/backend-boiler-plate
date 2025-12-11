@@ -4,6 +4,8 @@ const userSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true, required: true },
     email: { type: String, trim: true, required: true, unique: true },
+    // if you plan to implement roles, you can use this field
+    role: { type: String, required: true, enum: ['user', 'admin'], default: 'user' },
     password: {
       type: String, required: false,
     },
