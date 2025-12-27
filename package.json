@@ -39,7 +39,8 @@
     "uuid": "^13.0.0"
   },
   "overrides": {
-    "tinymce": "7.2.0"
+    "tinymce": "7.2.0",
+    "@tiptap/extension-link": ">=2.10.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
