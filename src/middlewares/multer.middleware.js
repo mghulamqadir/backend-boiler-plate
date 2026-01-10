@@ -1,83 +1,95 @@
-import aws from 'aws-sdk';
-import multer from 'multer';
-import sharp from 'sharp';
-import { v4 as uuidv4 } from 'uuid';
+import multer from "multer";
+import sharp from "sharp";
+import { v4 as uuidv4 } from "uuid";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { fromEnv } from "@aws-sdk/credential-providers";
 
-// ✅ AWS S3 Configuration
-aws.config.update({
-  credentials: new aws.Credentials({
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  }),
-  region: process.env.AWS_REGION,
-  sslEnabled: true,
-  s3ForcePathStyle: true,
-  signatureVersion: 'v4',
+const region = process.env.AWS_REGION;
+if (!region) throw new Error("AWS_REGION is required");
+
+const bucket = process.env.S3_BUCKET_NAME;
+if (!bucket) throw new Error("S3_BUCKET_NAME is required");
+
+const s3Client = new S3Client({
+  region,
+  credentials: fromEnv(),
+  forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+  endpoint: process.env.S3_ENDPOINT || undefined,
 });
 
-const s3 = new aws.S3();
-
-// ✅ Multer Storage (Temporary Memory Storage)
 const storage = multer.memoryStorage();
+
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
+    const allowedTypes = ["image/jpeg", "image/png"];
+    if (allowedTypes.includes(file.mimetype)) cb(null, true);
+    else {
       const error = new Error(
-        'Invalid file type! Only JPG and PNG images are allowed.',
+        "Invalid file type! Only JPG and PNG images are allowed."
       );
       error.statusCode = 400;
       cb(error, false);
     }
   },
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB File Size Limit
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
-// ✅ Function to Upload File to S3
+function encodeS3Key(key) {
+  return key.split("/").map(encodeURIComponent).join("/");
+}
+
+function buildPublicUrl({ bucket, region, key }) {
+  const encodedKey = encodeS3Key(key);
+
+  const base = process.env.S3_PUBLIC_BASE_URL;
+  if (base) return `${base.replace(/\/$/, "")}/${encodedKey}`;
+
+  return `https://${bucket}.s3.${region}.amazonaws.com/${encodedKey}`;
+}
+
 const uploadToS3 = async (buffer, fileName, contentType) => {
-  const fileKey = `uploads/${uuidv4()}-${fileName.replace(/\s+/g, '-')}`;
-  const params = {
-    Bucket: process.env.S3_BUCKET_NAME,
+  const safeName = String(fileName || "file")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w.-]/g, "");
+
+  const fileKey = `uploads/${uuidv4()}-${safeName}`;
+
+  const command = new PutObjectCommand({
+    Bucket: bucket,
     Key: fileKey,
     Body: buffer,
     ContentType: contentType,
-    ACL: 'public-read',
-  };
 
-  return new Promise((resolve, reject) => {
-    s3.upload(params, (err, data) => {
-      if (err) reject(err);
-      else resolve(data.Location);
-    });
+    ACL: "public-read",
   });
+
+  await s3Client.send(command);
+
+  return buildPublicUrl({ bucket, region, key: fileKey });
 };
 
-// ✅ Middleware to Resize, Compress & Upload Image
 const processAndUploadImage = async (req, res, next) => {
   if (!req.file) return next();
 
   try {
     const optimizedBuffer = await sharp(req.file.buffer)
+      .rotate()
       .jpeg({ quality: 80 })
       .toBuffer();
 
-    // Upload Processed Image to S3
     const fileUrl = await uploadToS3(
       optimizedBuffer,
       req.file.originalname,
-      'image/jpeg',
+      "image/jpeg"
     );
 
-    // Attach Uploaded Image URL to req.file
     req.file.location = fileUrl;
-
     next();
   } catch (error) {
-    console.error('Image Processing Error:', error);
-    res.status(400).json({ error: 'Error processing image' });
+    console.error("Image Processing Error:", error);
+    res.status(400).json({ error: "Error processing image" });
   }
 };
 

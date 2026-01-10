@@ -1,16 +1,26 @@
-import aws from 'aws-sdk';
+import { S3Client } from "@aws-sdk/client-s3";
+import { LambdaClient } from "@aws-sdk/client-lambda";
+import { fromEnv } from "@aws-sdk/credential-providers";
 
-aws.config.update({
-  credentials: new aws.Credentials({
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  }),
-  region: process.env.AWS_REGION,
-  sslEnabled: true,
-  s3ForcePathStyle: true,
-  signatureVersion: 'v4',
+const region = process.env.AWS_REGION;
+
+// Basic region validation (prevents “untrusted region” problems)
+const REGION_RE = /^[a-z]{2}(-gov)?-[a-z]+-\d$/;
+if (!REGION_RE.test(region || "")) {
+  throw new Error(
+    `Invalid AWS_REGION="${region}" Example valid value: "us-east-1".`
+  );
+}
+
+const credentials = fromEnv();
+
+export const s3Client = new S3Client({
+  region,
+  credentials,
+  forcePathStyle: true,
 });
 
-export const s3Client = new aws.S3();
-
-export const lambdaClient = new aws.Lambda();
+export const lambdaClient = new LambdaClient({
+  region,
+  credentials,
+});
