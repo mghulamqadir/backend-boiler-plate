@@ -60,9 +60,9 @@ const loginSchema = Joi.object({
 });
 
 const resetPasswordSchema = Joi.object({
-  code: Joi.string().min(3).required().messages({
-    'string.min': 'Invalid code.',
-    'any.required': 'Code is required.',
+  token: Joi.string().min(10).required().messages({
+    'string.min': 'Invalid token.',
+    'any.required': 'Token is required.',
   }),
   newPassword: Joi.string()
     .min(8)

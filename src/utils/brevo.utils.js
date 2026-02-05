@@ -5,7 +5,7 @@ const senderName = process.env.SENDER_NAME;
 const senderEmail = process.env.SENDER_EMAIL;
 const adminEmail = process.env.CONTACT_EMAIL;
 
-const sendPasswordResetEmail = async (user, resetCode, redirectUrl) => {
+const sendPasswordResetEmail = async (user, resetToken, redirectUrl) => {
   try {
     if (!brevoApiKey) {
       throw new Error(
@@ -21,6 +21,7 @@ const sendPasswordResetEmail = async (user, resetCode, redirectUrl) => {
     const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
     // Email Parameters
+    const baseUrl = redirectUrl || process.env.FRONTEND_URL || 'http://localhost:3000';
     const emailParams = {
       sender: { name: senderName, email: senderEmail },
       to: [{ email: user.email, name: user.name }],
@@ -29,7 +30,7 @@ const sendPasswordResetEmail = async (user, resetCode, redirectUrl) => {
         <h3>Hello ${user.name},</h3>
         <p>We received a request to reset your password.</p>
         <p>Click the link below to reset your password:</p>
-        <p><a href="${redirectUrl}/reset-password?code=${resetCode}">Reset Password</a></p>
+        <p><a href="${baseUrl}/reset-password?token=${resetToken}">Reset Password</a></p>
         <p>If you did not request this, please ignore this email.</p>
       `,
     };
@@ -72,7 +73,7 @@ const sendContactUsEmail = async (username, email, description) => {
     throw error;
   }
 };
-const sendVerificationEmail = async (user, verificationCode) => {
+const sendVerificationEmail = async (user, verificationToken) => {
   try {
     if (!brevoApiKey) {
       throw new Error(
@@ -96,9 +97,8 @@ const sendVerificationEmail = async (user, verificationCode) => {
       htmlContent: `
         <h3>Hello ${user.name},</h3>
         <p>Thank you for signing up! Please verify your email address.</p>
-        <p>Your verification code is: <strong>${verificationCode}</strong></p>
-        <p> Click the link below to verify your email:</p>
-        <p><a href="${REDIRECT_URL}/verify-email?code=${verificationCode}">Verify Email</a></p>
+        <p>Click the link below to verify your email:</p>
+        <p><a href="${REDIRECT_URL}/verify-email?token=${verificationToken}">Verify Email</a></p>
         <p>If you did not request this, please ignore this email.</p>
       `,
     };

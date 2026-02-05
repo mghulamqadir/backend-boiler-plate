@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema(
       type: Boolean, default: false,
     },
     status: {
-      type: String, default: 'active', enum: ['active', 'inactive'],
+      type: String, default: 'inactive', enum: ['active', 'inactive'],
     },
     description: {
       type: String,

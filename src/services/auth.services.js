@@ -2,14 +2,17 @@ import bcrypt from 'bcryptjs';
 import User from '../models/user.model.js';
 import { ApiError } from '../utils/response.handler.js';
 import { generateJwtToken } from '../utils/jwt.token.js';
-import Otp from '../models/otp.model.js';
 import {
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from '../utils/brevo.utils.js';
 import { stripeCreateCustomer } from '../utils/stripe.utils.js';
-import { generateSixDigitCode } from '../utils/constant.utils.js';
-import crypto from 'crypto';
+import {
+  createEmailVerificationToken,
+  verifyEmailVerificationToken,
+  createResetPasswordToken,
+  verifyResetPasswordToken,
+} from '../utils/token.utils.js';
 
 export async function onModuleInit() {
   try {
@@ -91,14 +94,11 @@ export async function signup({ name, email, password, confirmPassword }, file) {
   });
 
   const savedUser = await newUser.save();
-  const code = generateSixDigitCode();
-  await Otp.create({
+  const verificationToken = createEmailVerificationToken({
     userId: savedUser._id,
     email: savedUser.email,
-    newCode: code,
-    purpose: 'signup',
   });
-  await sendVerificationEmail(savedUser, code);
+  await sendVerificationEmail(savedUser, verificationToken);
 
   const userData = savedUser.toObject();
   delete userData.password;
@@ -117,7 +117,7 @@ export async function login({ email, password }) {
     ]);
   }
 
-  const isMatch = await bcrypt.compare(password, user.password);
+  const isMatch = bcrypt.compare(password, user.password);
 
   if (!isMatch) {
     throw ApiError(400, 'Invalid email or password', ['Incorrect password.']);
@@ -147,22 +147,6 @@ export async function login({ email, password }) {
     response.token = null;
     response.user = null;
     response.success = false;
-    const existingOtp = await Otp.findOne({
-      userId: user._id,
-      purpose: 'signup',
-    });
-    if (existingOtp) {
-      await Otp.deleteOne({ userId: user._id, purpose: 'signup' });
-    }
-
-    const code = generateSixDigitCode();
-    await Otp.create({
-      userId: userData._id,
-      email: userData.email,
-      newCode: code,
-      purpose: 'signup',
-    });
-    // await sendVerificationEmail(userData, code);
   }
   return response;
 }
@@ -176,23 +160,9 @@ export async function forgotPassword(email, redirectUrl) {
       'This email address is not registered. Please check or sign up.',
     );
   }
-  const existingOtp = await Otp.findOne({
-    userId: user._id,
-    purpose: 'forgotPassword',
-  });
-  if (existingOtp) {
-    await Otp.deleteOne({ userId: user._id, purpose: 'forgotPassword' });
-  }
-
-  const resetToken = crypto.randomBytes(32).toString('hex');
-
-  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-
-  await Otp.create({
+  const resetToken = createResetPasswordToken({
     userId: user._id,
     email: user.email,
-    newCode: hashedToken,
-    purpose: 'forgotPassword',
   });
 
   await sendPasswordResetEmail(user, resetToken, redirectUrl);
@@ -201,25 +171,39 @@ export async function forgotPassword(email, redirectUrl) {
 }
 
 export async function resetPassword(token, newPassword) {
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  if (!token) {
+    throw ApiError(400, 'Reset token is required', [
+      'Please request a new password reset link.',
+    ]);
+  }
 
-  const otp = await Otp.findOne({
-    newCode: hashedToken,
-    purpose: 'forgotPassword'
-  });
-
-  if (!otp) {
+  let payload;
+  try {
+    payload = verifyResetPasswordToken(token);
+  } catch (error) {
     throw ApiError(400, 'Invalid or expired reset token', [
       'Please request a new password reset link.',
     ]);
   }
 
-  const user = await User.findById(otp.userId);
+  if (!payload?.userId || payload?.purpose !== 'reset-password') {
+    throw ApiError(400, 'Invalid reset token', [
+      'Please request a new password reset link.',
+    ]);
+  }
+
+  const user = await User.findById(payload.userId);
   if (!user) {
     throw ApiError(404, 'User not found');
   }
 
-  const isSamePassword = await bcrypt.compare(newPassword, user.password);
+  if (payload.email && payload.email !== user.email) {
+    throw ApiError(400, 'Invalid reset token', [
+      'Please request a new password reset link.',
+    ]);
+  }
+
+  const isSamePassword = bcrypt.compare(newPassword, user.password);
   if (isSamePassword) {
     throw ApiError(400, 'New password cannot be the same as the old password', [
       'Please choose a different password.',
@@ -229,30 +213,49 @@ export async function resetPassword(token, newPassword) {
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   await User.findByIdAndUpdate(user._id, { password: hashedPassword }, { new: true });
 
-  await otp.deleteOne();
-
   return { message: 'Password reset successfully.' };
 }
 
-export async function verifyEmail(code) {
-  const otp = await Otp.findOne({ newCode: code, purpose: 'signup' });
-  if (!otp) {
-    throw ApiError(400, 'Invalid or expired verification code', [
-      'Please request a new verification code.',
+export async function verifyEmail(token) {
+  if (!token) {
+    throw ApiError(400, 'Verification token is required', [
+      'Please request a new verification email.',
     ]);
   }
-  const isExpired = otp.expireAt < new Date();
-  if (isExpired) {
-    throw ApiError(400, 'Verification code has expired', [
-      'Please request a new verification code.',
+
+  let payload;
+  try {
+    payload = verifyEmailVerificationToken(token);
+  } catch (error) {
+    throw ApiError(400, 'Invalid or expired verification token', [
+      'Please request a new verification email.',
     ]);
   }
-  await User.findOneAndUpdate(
-    { _id: otp.userId },
-    { isVerified: true },
-    { new: true },
-  );
-  await otp.deleteOne();
+
+  if (!payload?.userId || payload?.purpose !== 'verify-email') {
+    throw ApiError(400, 'Invalid verification token', [
+      'Please request a new verification email.',
+    ]);
+  }
+
+  const user = await User.findById(payload.userId);
+  if (!user) {
+    throw ApiError(404, 'User not found');
+  }
+
+  if (payload.email && payload.email !== user.email) {
+    throw ApiError(400, 'Invalid verification token', [
+      'Please request a new verification email.',
+    ]);
+  }
+
+  if (!user.isVerified) {
+    await User.findByIdAndUpdate(
+      user._id,
+      { isVerified: true, status: 'active' },
+      { new: true },
+    );
+  }
 }
 
 export async function resendVerificationEmail(email, purpose) {
@@ -270,26 +273,20 @@ export async function resendVerificationEmail(email, purpose) {
     ]);
   }
 
-  const existingOtp = await Otp.findOne({
-    userId: user._id,
-    purpose,
-  });
-  if (existingOtp) {
-    await Otp.deleteOne({ userId: user._id, purpose });
-  }
-  const code = generateSixDigitCode();
-  await Otp.create({
-    userId: user._id,
-    email: user.email,
-    newCode: code,
-    purpose,
-  });
   if (purpose === 'signup') {
-    await sendVerificationEmail(user, code);
+    const verificationToken = createEmailVerificationToken({
+      userId: user._id,
+      email: user.email,
+    });
+    await sendVerificationEmail(user, verificationToken);
   }
 
   if (purpose === 'forgotPassword') {
-    await sendPasswordResetEmail(user, code);
+    const resetToken = createResetPasswordToken({
+      userId: user._id,
+      email: user.email,
+    });
+    await sendPasswordResetEmail(user, resetToken);
   }
 
   return { message: 'Verification email sent successfully.' };
