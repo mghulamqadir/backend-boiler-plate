@@ -9,12 +9,6 @@ const transactionSchema = new mongoose.Schema(
     },
     totalAmount: { type: Number, required: true }, // Total cost of the transaction
     stripePaymentIntentId: { type: String, required: true }, // Stripe payment intent ID
-    purchasedAt: { type: Date, default: Date.now },
-    campaignId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Campaign',
-      required: true,
-    },
     status: {
       type: String,
       enum: ['succeeded', 'failed', 'canceled'],
