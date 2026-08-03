@@ -7,60 +7,13 @@ import {
   sendVerificationEmail,
 } from '../utils/brevo.utils.js';
 import { stripeCreateCustomer } from '../utils/stripe.utils.js';
+import { getGoogleClient } from '../config/google.config.js';
 import {
   createEmailVerificationToken,
   verifyEmailVerificationToken,
   createResetPasswordToken,
   verifyResetPasswordToken,
 } from '../utils/token.utils.js';
-
-export async function onModuleInit() {
-  try {
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@gmail.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'defaultAdminPassword';
-
-    // Check if an admin user already exists
-    const existingAdmin = await User.findOne({ email: adminEmail });
-
-    if (!existingAdmin) {
-      const hashedPassword = await bcrypt.hash(adminPassword, 10);
-
-      // Create a new admin user
-      const newAdmin = new User({
-        name: 'Admin',
-        email: adminEmail,
-        password: hashedPassword,
-        isVerified: true,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      await newAdmin.save();
-      console.log('Admin user created successfully.');
-    }
-  } catch (error) {
-    console.error('Error during admin user creation:', error);
-    throw error;
-  }
-}
-
-export async function adminLogin({ email, password }) {
-  const user = await User.findOne({ email });
-  if (!user) {
-    throw ApiError(404, 'Invalid email or password', [
-      'No admin exists with this email address.',
-    ]);
-  }
-
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    throw ApiError(401, 'Invalid email or password', ['Incorrect password.']);
-  }
-
-  const token = generateJwtToken({ userId: user._id });
-  return { token, email: user.email };
-}
 
 export async function signup({ name, email, password, confirmPassword }, file) {
   if (password !== confirmPassword) {
@@ -151,6 +104,85 @@ export async function login({ email, password }) {
   return response;
 }
 
+export async function googleAuth({ credential, idToken }) {
+  let payload;
+
+  try {
+    const ticket = await getGoogleClient().verifyIdToken({
+      idToken: credential || idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    payload = ticket.getPayload();
+  } catch {
+    throw ApiError(401, 'Invalid Google credential', [
+      'The Google credential is invalid or has expired.',
+    ]);
+  }
+
+  if (!payload?.sub || !payload?.email || payload.email_verified !== true) {
+    throw ApiError(401, 'Google account could not be verified', [
+      'A verified Google email address is required.',
+    ]);
+  }
+
+  const email = payload.email.toLowerCase();
+  let user = await User.findOne({
+    $or: [{ googleId: payload.sub }, { email }],
+  });
+
+  if (user?.googleId && user.googleId !== payload.sub) {
+    throw ApiError(409, 'Google account conflict', [
+      'This email is already linked to another Google account.',
+    ]);
+  }
+
+  if (!user) {
+    const stripeCustomerId = await stripeCreateCustomer({
+      name: payload.name || email.split('@')[0],
+      email,
+    });
+
+    user = new User({
+      name: payload.name || email.split('@')[0],
+      email,
+      provider: 'google',
+      googleId: payload.sub,
+      profilePicture: payload.picture || null,
+      isVerified: true,
+      status: 'active',
+      stripeCustomerId,
+    });
+  } else {
+    user.googleId = payload.sub;
+    user.isVerified = true;
+    user.status = 'active';
+
+    if (!user.profilePicture && payload.picture) {
+      user.profilePicture = payload.picture;
+    }
+
+    if (!user.stripeCustomerId) {
+      user.stripeCustomerId = await stripeCreateCustomer({
+        name: user.name,
+        email: user.email,
+      });
+    }
+  }
+
+  user.loginAttempts += 1;
+  user.lastLoginAttempt = new Date();
+  await user.save();
+
+  const userData = user.toObject();
+  delete userData.password;
+
+  return {
+    token: generateJwtToken({ userId: user._id }),
+    user: userData,
+    message: 'Google authentication successful',
+  };
+}
+
 export async function forgotPassword(email, redirectUrl) {
 
   const user = await User.findOne({ email });
@@ -180,7 +212,7 @@ export async function resetPassword(token, newPassword) {
   let payload;
   try {
     payload = verifyResetPasswordToken(token);
-  } catch (error) {
+  } catch {
     throw ApiError(400, 'Invalid or expired reset token', [
       'Please request a new password reset link.',
     ]);
@@ -226,7 +258,7 @@ export async function verifyEmail(token) {
   let payload;
   try {
     payload = verifyEmailVerificationToken(token);
-  } catch (error) {
+  } catch {
     throw ApiError(400, 'Invalid or expired verification token', [
       'Please request a new verification email.',
     ]);

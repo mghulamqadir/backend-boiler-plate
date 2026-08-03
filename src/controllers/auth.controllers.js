@@ -22,6 +22,15 @@ export async function login(req, res) {
   }
 }
 
+export async function googleAuth(req, res) {
+  try {
+    const { token, user, message } = await authService.googleAuth(req.body);
+    return successResponse(res, 200, message, { user, token });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
 export async function forgotPassword(req, res) {
   try {
     const { email, redirectUrl } = req.body;

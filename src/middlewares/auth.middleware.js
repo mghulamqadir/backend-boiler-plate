@@ -59,6 +59,15 @@ const loginSchema = Joi.object({
     .messages({ 'any.required': 'Password is required.' }),
 });
 
+const googleAuthSchema = Joi.object({
+  credential: Joi.string().min(10),
+  idToken: Joi.string().min(10),
+})
+  .or('credential', 'idToken')
+  .messages({
+    'object.missing': 'A Google credential is required.',
+  });
+
 const resetPasswordSchema = Joi.object({
   token: Joi.string().min(10).required().messages({
     'string.min': 'Invalid token.',
@@ -91,4 +100,5 @@ const resendEmailSchema = Joi.object({
 export const resendEmailValidator = validateRequest(resendEmailSchema);
 export const signupValidator = validateRequest(signupSchema);
 export const loginValidator = validateRequest(loginSchema);
+export const googleAuthValidator = validateRequest(googleAuthSchema);
 export const resetPasswordValidator = validateRequest(resetPasswordSchema);

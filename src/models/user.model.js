@@ -9,6 +9,16 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String, required: false,
     },
+    provider: {
+      type: String,
+      enum: ['email', 'google'],
+      default: 'email',
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     profilePicture: { type: String, default: null },
     bio: {
       type: String, default: '',

@@ -4,6 +4,7 @@ import * as authControllers from '../controllers/auth.controllers.js';
 import {
   signupValidator,
   loginValidator,
+  googleAuthValidator,
   resetPasswordValidator,
   resendEmailValidator,
 } from '../middlewares/auth.middleware.js';
@@ -28,6 +29,8 @@ router.post(
 );
 
 router.post('/login', loginValidator, authControllers.login);
+
+router.post('/google-auth', googleAuthValidator, authControllers.googleAuth);
 
 router.post('/forgot-password', authControllers.forgotPassword);
 
